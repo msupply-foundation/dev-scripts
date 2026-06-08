@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>omSupply mock proxy</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 2rem auto; max-width: 720px; color: #222; }
+  h1 { font-size: 1.2rem; }
+  fieldset { margin-bottom: 1rem; }
+  label { display: inline-block; min-width: 140px; }
+  input[type=text], input[type=number], select, textarea { width: 360px; padding: 4px; font-family: monospace; }
+  button { padding: 6px 14px; margin-right: 8px; cursor: pointer; }
+  .row { margin-bottom: 8px; }
+  pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow: auto; }
+  .pill { display:inline-block; padding:2px 8px; border-radius: 999px; font-size: 0.85rem; color:#fff; }
+  .pill.passthrough { background:#5b9; }
+  .pill.error, .pill.offline, .pill.http_status, .pill.truncate { background:#c43; }
+</style>
+</head>
+<body>
+<h1>omSupply mock proxy <span id="modePill" class="pill">…</span></h1>
+<p>Proxies <code>/graphql</code> → upstream. Selectively replaces responses for manual testing of typed GraphQL errors and the connection-lost banner. Quick presets below; or fine-tune in the form.</p>
+
+<fieldset>
+<legend>Quick presets</legend>
+<button data-preset="passthrough">Pass through</button>
+<button data-preset="offline">Offline (all)</button>
+<button data-preset="unauth">Unauthenticated</button>
+<button data-preset="forbidden">Forbidden</button>
+<button data-preset="forbidden-empty-path">Forbidden (empty path — edge case)</button>
+<button data-preset="forbidden-silent">Forbidden on silent path (reports)</button>
+<button data-preset="badinput">Bad user input</button>
+<button data-preset="internal">Internal error</button>
+<button data-preset="internal-long">Internal error (long detail)</button>
+<button data-preset="http500">HTTP 500 no body</button>
+<button data-preset="truncate">Truncated body</button>
+<button data-preset="slow">Slow (5s delay)</button>
+<button data-preset="fail3">Fail next 3 then recover</button>
+</fieldset>
+
+<fieldset>
+<legend>Custom rule</legend>
+<div class="row"><label>Mode</label>
+  <select id="mode">
+    <option value="passthrough">passthrough</option>
+    <option value="offline">offline</option>
+    <option value="error">error (typed graphql)</option>
+    <option value="http_status">http_status</option>
+    <option value="truncate">truncate</option>
+  </select>
+</div>
+<div class="row"><label>Error message</label>
+  <select id="errorType">
+    <option>Unauthenticated</option>
+    <option>Forbidden</option>
+    <option>Bad user input</option>
+    <option>Internal error</option>
+  </select>
+</div>
+<div class="row"><label>Detail</label>
+  <input type="text" id="detail" placeholder="(extensions.details)" />
+</div>
+<div class="row"><label>Path (csv)</label>
+  <input type="text" id="path" placeholder="e.g. reports  (leave blank for [operationName])" />
+</div>
+<div class="row"><label>Operations (csv)</label>
+  <input type="text" id="operations" placeholder="empty = all (e.g. items, migrationStatus)" />
+</div>
+<div class="row"><label>Count</label>
+  <input type="number" id="count" placeholder="blank = forever" />
+</div>
+<div class="row"><label>Delay ms</label>
+  <input type="number" id="delay_ms" value="0" />
+</div>
+<div class="row"><label>HTTP status</label>
+  <input type="number" id="http_status" value="500" />
+</div>
+<button id="apply">Apply</button>
+<button id="refresh">Refresh</button>
+</fieldset>
+
+<h2>Current rule</h2>
+<pre id="state">…</pre>
+
+<script>
+const PRESETS = {
+  passthrough: { mode: 'passthrough', count: null, operations: [] },
+  offline: { mode: 'offline', count: null, operations: [], delay_ms: 0 },
+  unauth: { mode: 'error', errorType: 'Unauthenticated', detail: 'token expired', operations: [], count: null },
+  forbidden: { mode: 'error', errorType: 'Forbidden', detail: 'not permitted', path: ['items'], operations: [], count: null },
+  'forbidden-empty-path': { mode: 'error', errorType: 'Forbidden', detail: 'no path', path: [], operations: [], count: null },
+  'forbidden-silent': { mode: 'error', errorType: 'Forbidden', detail: 'silent allowlist', path: ['reports'], operations: ['reports'], count: null },
+  badinput: { mode: 'error', errorType: 'Bad user input', detail: 'invalid filter', operations: [], count: null },
+  internal: { mode: 'error', errorType: 'Internal error', detail: 'something blew up', operations: [], count: null },
+  'internal-long': { mode: 'error', errorType: 'Internal error', detail: 'a'.repeat(220), operations: [], count: null },
+  http500: { mode: 'http_status', http_status: 500, operations: [], count: null },
+  truncate: { mode: 'truncate', operations: [], count: null },
+  slow: { mode: 'passthrough', delay_ms: 5000, operations: [], count: null },
+  fail3: { mode: 'error', errorType: 'Internal error', detail: 'retry me', operations: [], count: 3 },
+};
+
+const $ = id => document.getElementById(id);
+
+async function load() {
+  const r = await fetch('/__mock/control');
+  const s = await r.json();
+  $('state').textContent = JSON.stringify(s, null, 2);
+  const pill = $('modePill');
+  pill.textContent = s.mode;
+  pill.className = 'pill ' + s.mode;
+  $('mode').value = s.mode;
+  $('errorType').value = s.errorType;
+  $('detail').value = s.detail || '';
+  $('path').value = (s.path || []).join(',');
+  $('operations').value = (s.operations || []).join(',');
+  $('count').value = s.count == null ? '' : s.count;
+  $('delay_ms').value = s.delay_ms || 0;
+  $('http_status').value = s.http_status || 500;
+}
+
+async function apply(patch) {
+  await fetch('/__mock/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  load();
+}
+
+document.querySelectorAll('[data-preset]').forEach(b => {
+  b.addEventListener('click', () => apply(PRESETS[b.dataset.preset]));
+});
+
+$('apply').addEventListener('click', () => {
+  const csv = v => v.split(',').map(s => s.trim()).filter(Boolean);
+  const cnt = $('count').value;
+  apply({
+    mode: $('mode').value,
+    errorType: $('errorType').value,
+    detail: $('detail').value,
+    path: csv($('path').value),
+    operations: csv($('operations').value),
+    count: cnt === '' ? null : parseInt(cnt, 10),
+    delay_ms: parseInt($('delay_ms').value, 10) || 0,
+    http_status: parseInt($('http_status').value, 10) || 500,
+  });
+});
+
+$('refresh').addEventListener('click', load);
+load();
+</script>
+</body>
+</html>

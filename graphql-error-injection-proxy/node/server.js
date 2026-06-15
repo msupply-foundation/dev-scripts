@@ -6,7 +6,7 @@
  * Sits between the client and the real omSupply server and lets a tester
  * selectively replace GraphQL responses with typed errors (Unauthenticated,
  * Forbidden, BadUserInput, InternalServerError) or simulate transport
- * failures (offline, HTTP 500 no body, slow trickle, truncation).
+ * failures (offline, HTTP 500 no body, truncation).
  *
  * Used for manual testing of PR #11444 (typed GraphQL errors + connection
  * banner). See README.md in this folder for usage.

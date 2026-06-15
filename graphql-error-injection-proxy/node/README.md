@@ -7,7 +7,7 @@ It sits between the client and the real omSupply server and proxies
 everything normally — but lets you selectively swap individual
 operations for typed GraphQL errors (`Unauthenticated`, `Forbidden`,
 `Bad user input`, `Internal error`) or simulate transport failures
-(offline, HTTP 500 with no body, slow trickle, truncated body) via a
+(offline, HTTP 500 with no body, truncated body) via a
 small web UI.
 
 No npm dependencies. Node 18+.

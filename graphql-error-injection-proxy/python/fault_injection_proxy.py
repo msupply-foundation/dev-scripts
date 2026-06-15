@@ -8,8 +8,8 @@ Two-stage rule model:
   Stage 2 — when active, these compose:
             - `delay_ms`: pre-response delay (ms). 0 disables.
             - `response.kind`: one of passthrough | offline | error |
-              http_status | truncate | slow_stream.
-            - `response.{errorType,detail,path,http_status,chunk_delay}`:
+              http_status | truncate.
+            - `response.{errorType,detail,path,http_status}`:
               knobs for the chosen kind.
             - `operations` / `count`: filters.
 
@@ -38,7 +38,6 @@ DEFAULT_RESPONSE = {
     "detail": "",
     "path": [],
     "http_status": 500,
-    "chunk_delay": 0.5,  # seconds between chunks, slow_stream only
 }
 
 RULE = {
@@ -201,38 +200,23 @@ class FaultInjectionAddon:
                 RULE["response"]["http_status"], b"",
                 {"Content-Type": "text/plain", **cors_headers(flow)},
             )
-        elif kind in ("passthrough", "truncate", "slow_stream"):
+        elif kind in ("passthrough", "truncate"):
             # Need upstream's response — tag for responseheaders/response hooks
             flow.metadata["fault_kind"] = kind
 
         consume_rule()
 
     def responseheaders(self, flow):
-        """Runs before the body streams. Must set up streaming faults
-        (slow_stream) here; truncate is body-shaped so it's handled in
+        """Runs before the body streams. Overrides CORS on any
+        upstream-forwarded /graphql response (passthrough included) so the
+        dev-server origin works. truncate is body-shaped, so it's handled in
         the `response` hook once the full body is buffered."""
         kind = flow.metadata.get("fault_kind")
         if kind is None:
             return
 
-        # Any upstream-forwarded /graphql response (passthrough included)
-        # gets CORS overridden so the dev-server origin works.
         for k, v in cors_headers(flow).items():
             flow.response.headers[k] = v
-
-        if kind == "slow_stream":
-            chunk_delay = RULE["response"]["chunk_delay"]
-            log(f"slow_stream: trickling with {chunk_delay}s between pieces")
-
-            def trickle(chunks):
-                for chunk in chunks:
-                    # Split each upstream chunk into ~10 pieces so the
-                    # trickle is visible even on small bodies.
-                    step = max(1, len(chunk) // 10)
-                    for i in range(0, len(chunk), step):
-                        time.sleep(chunk_delay)
-                        yield chunk[i:i + step]
-            flow.response.stream = trickle
 
     def response(self, flow):
         if flow.metadata.get("fault_kind") != "truncate":

@@ -45,7 +45,6 @@
 <button data-preset="truncate">Truncated body</button>
 <button data-preset="slow">Slow (5s delay, then upstream)</button>
 <button data-preset="slow-forbidden">Slow + Forbidden (3s, then error)</button>
-<button data-preset="slow_stream">Slow stream (trickle chunks)</button>
 <button data-preset="fail3">Fail next 3 then auto-off</button>
 </fieldset>
 
@@ -81,7 +80,6 @@
     <option value="error">error — typed GraphQL error</option>
     <option value="http_status">http_status — bare HTTP code, no body</option>
     <option value="truncate">truncate — upstream body cut in half</option>
-    <option value="slow_stream">slow_stream — trickle chunks</option>
   </select>
 </div>
 
@@ -108,12 +106,6 @@
   </div>
 </div>
 
-<div class="kind-config" data-kind="slow_stream">
-  <div class="row"><label>chunk_delay (s)</label>
-    <input type="number" id="chunk_delay" step="0.1" value="0.5" />
-  </div>
-</div>
-
 <button id="apply">Apply</button>
 <button id="refresh">Refresh</button>
 </fieldset>
@@ -136,7 +128,6 @@ const PRESETS = {
   truncate: { active: true, delay_ms: 0, operations: [], count: null, response: { kind: 'truncate' } },
   slow: { active: true, delay_ms: 5000, operations: [], count: null, response: { kind: 'passthrough' } },
   'slow-forbidden': { active: true, delay_ms: 3000, operations: [], count: null, response: { kind: 'error', errorType: 'Forbidden', detail: 'slow + denied', path: ['items'] } },
-  slow_stream: { active: true, delay_ms: 0, operations: [], count: null, response: { kind: 'slow_stream', chunk_delay: 0.5 } },
   fail3: { active: true, delay_ms: 0, operations: [], count: 3, response: { kind: 'error', errorType: 'Internal error', detail: 'retry me', path: [] } },
 };
 
@@ -170,7 +161,6 @@ async function load() {
   $('detail').value = r2.detail || '';
   $('path').value = (r2.path || []).join(',');
   $('http_status').value = r2.http_status || 500;
-  $('chunk_delay').value = r2.chunk_delay || 0.5;
   showKindConfig($('kind').value);
 }
 
@@ -202,7 +192,6 @@ $('apply').addEventListener('click', () => {
       detail: $('detail').value,
       path: csv($('path').value),
       http_status: parseInt($('http_status').value, 10) || 500,
-      chunk_delay: parseFloat($('chunk_delay').value) || 0.5,
     },
   });
 });

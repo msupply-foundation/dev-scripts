@@ -1,0 +1,5 @@
+# GoReplay binary — download and drop beside the scripts (see README)
+gor.exe
+
+# Runtime state written by the harness
+.loadtest-state.xml

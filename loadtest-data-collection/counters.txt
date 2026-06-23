@@ -1,0 +1,13 @@
+\Processor(*)\% Processor Time
+\System\Processor Queue Length
+\System\Context Switches/sec
+\Memory\Available MBytes
+\Memory\Committed Bytes
+\Memory\Pages/sec
+\PhysicalDisk(_Total)\% Disk Time
+\PhysicalDisk(_Total)\Avg. Disk sec/Read
+\PhysicalDisk(_Total)\Avg. Disk sec/Write
+\PhysicalDisk(_Total)\Disk Reads/sec
+\PhysicalDisk(_Total)\Disk Writes/sec
+\PhysicalDisk(_Total)\Disk Bytes/sec
+\Network Interface(*)\Bytes Total/sec
